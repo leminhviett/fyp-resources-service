@@ -11,13 +11,14 @@ class Cluster:
         pass
 
 class Pod:
-    def __init__(self, cluster : Cluster, name, img_name, port) -> None:
+    def __init__(self, cluster : Cluster, name, img_name, port, remote_access) -> None:
         self.name = name
         self.cluster = cluster
         self.ext_ip = None
         self.ext_port = None
         self.img_name = img_name
         self.port = port
+        self.remote_access = remote_access
 
         self.start()
     def start(self):

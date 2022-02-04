@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_restful import Api       
 from ContainerServices.LocalCluster import MiniKube
-from ContainerResources import Container
+from ContainerResources import KaliContainer, SQLInj
 
 if __name__ == "__main__":
     mk = MiniKube()
@@ -11,5 +11,7 @@ if __name__ == "__main__":
 
     api = Api(app)
 
-    api.add_resource(Container, "/container")
+    api.add_resource(KaliContainer, "/kali_container")
+    api.add_resource(SQLInj, "/sql_inj")
+
     app.run(debug=True, port=8000)

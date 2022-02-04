@@ -1,3 +1,4 @@
+from re import sub
 import time, subprocess
 from .Base import Cluster, Pod
 import multiprocessing, collections, threading
@@ -42,18 +43,23 @@ class MiniKube(Cluster):
         del cls._exposed_services[service_name]
     
 class LocalPod(Pod):
-    def __init__(self, cluster, name, img_name="viet009/kali-headless:0.02", port=22) -> None:
+    def __init__(self, cluster, name, remote_access=True, img_name="viet009/kali-headless:0.02", port=22) -> None:
         self.pod_proc = None
-        super().__init__(cluster, name, img_name, port)
+        super().__init__(cluster, name, img_name, port, remote_access)
+
 
     def start(self):
-        query = f"kubectl run {self.name} --image={self.img_name} -i --tty --port {self.port}"
+        if self.remote_access:
+            query = f"kubectl run {self.name} --image={self.img_name} -i --tty --port {self.port}"
+        else:
+            query = f"kubectl run {self.name} --image={self.img_name} --port {self.port}"
         self.pod_proc = subprocess.Popen(query, shell=True)
         
-        #make sure pod is up & running
-        time.sleep(2.5)
-        create_service = f"kubectl expose pod {self.name} --type=LoadBalancer --name={self.name}"
-        subprocess.call(create_service, shell=True)
+        if self.remote_access:
+            #make sure pod is up & running
+            time.sleep(2.5)
+            create_service = f"kubectl expose pod {self.name} --type=LoadBalancer --name={self.name}"
+            subprocess.call(create_service, shell=True)
 
     def setup_ssh(self):
         q1 = f"kubectl exec {self.name} -- systemctl enable ssh"
@@ -66,15 +72,19 @@ class LocalPod(Pod):
 
     def add_user(self, username, pw):
         q1 = f"kubectl exec {self.name} -- useradd -m {username}"
-        q2 = f"kubectl exec {self.name} -- bash -c \"echo '{username}:{pw}'|chpasswd\""
+        q2 = f"kubectl exec {self.name} -- usermod -aG sudo {username}"
+        q3 = f"kubectl exec {self.name} -- bash -c \"echo '{username}:{pw}'|chpasswd\""
         subprocess.call(q1, shell=True)
         subprocess.call(q2, shell=True)
+        subprocess.call(q3, shell=True)
+
 
         print("user added")
 
         return username, pw
     
     def get_address(self) -> tuple:
+        # external address
         if self.ext_ip and self.port:
             return self.ext_ip, self.port
 
@@ -85,11 +95,11 @@ class LocalPod(Pod):
                 with open(f"./temp/{self.name}", 'r') as f:
                     lines = f.readlines()
                     if len(lines) < 7:
-                        print("Still waiting for MK logs ... Wait for 1 sec")
+                        print("Still waiting for MK logs ... Wait for 2 sec")
                         time.sleep(2)
+                        flag += 1 
                         continue
                         
-                    flag = False
                     i = len(lines) - 1
                     
                     while i >= 0:
@@ -105,14 +115,38 @@ class LocalPod(Pod):
 
         return None, None
 
+    def get_internal_address(self):
+        time.sleep(3)
+
+        q1 = "kubectl get pod %s -o jsonpath='{.status.podIP}'"% (self.name)
+        q2 = "kubectl get pod %s -o jsonpath='{.spec.containers[*].ports[*].containerPort}'"% (self.name)
+
+        flag = 0
+        while flag <= 5:
+            res1 = subprocess.run(q1, shell=True, capture_output=True)
+            res2 = subprocess.run(q2, shell=True, capture_output=True)
+            int_ip, port = res1.stdout.decode(), res2.stdout.decode()
+
+            if int_ip != "" and port != "":
+                return int_ip, port
+
+            time.sleep(1)
+            flag += 1
+        return "", ""
+
+
     def terminate(self):
         q1 = f"kubectl delete pod {self.name}"
         q2 = f"kubectl delete svc {self.name}"
         subprocess.call(q1, shell=True)
         subprocess.call(q2, shell=True)
-
-        self.cluster.stop_service(self.name)
-        self.pod_proc.terminate()
+        
+        try:
+            self.cluster.stop_service(self.name)
+            self.pod_proc.terminate()
+        except:
+            print("process might not exist")
+            
 
         try:
             subprocess.call(f"rm ./temp/{self.name}", shell=True)
