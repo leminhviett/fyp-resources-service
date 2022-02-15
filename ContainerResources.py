@@ -1,4 +1,5 @@
 from asyncio import subprocess
+import resource
 from unicodedata import name
 from flask_restful import Resource, reqparse, marshal_with, fields
 from ContainerServices.LocalCluster import LocalPod, MiniKube
@@ -6,6 +7,7 @@ import subprocess
 
 input_data = reqparse.RequestParser()
 input_data.add_argument("user_name", type=str, help="username is reuqired", required=True)
+input_data.add_argument("resource_name", type=str)
 input_data.add_argument("pw", type=str)
 
 def get_response_format():
@@ -14,27 +16,60 @@ def get_response_format():
 
 mfields = get_response_format()
 
-class SQLInj(Resource):
+
+def is_exist(img_name):
+    q = f'docker search --format "{{.Name}}" {img_name}'
+    res = subprocess.run(q, shell=True, capture_output=True)
+
+    return res.stdout.decode() != ""
+
+class CustomResource(Resource):
     _running_pods = {}
 
     @marshal_with(mfields)
     def post(self):
         # create vm
+        # resource name is same as repo name
         args = input_data.parse_args()
-        user_name = args['user_name']
-        pod = LocalPod(MiniKube.get_instance(), name=f"{user_name}-sql-inj-ex", img_name="viet009/sql-inj-ex", port=8000, remote_access=False)
+        user_name, resource_name = args['user_name'], args['resource_name']
+
+        try:
+            temp = resource_name.split("/")
+            user_repo, img_tag = temp[0], temp[1]
+
+            if ":" in img_tag:
+                img_name = img_tag.split(":")[0]
+            else:
+                img_name = img_tag
+
+            if not is_exist(img_name):
+                return {"error" : "Image not found in Docker Hub"}
+
+        except Exception as e:
+            print(e)
+            return {"error" : "Resource name in wrong format"}
+
+
+        pod = LocalPod(MiniKube.get_instance(), name=f"{user_name}-{user_repo}-{img_tag}", img_name=resource_name, port=8000, remote_access=False)
         ip, port = pod.get_internal_address()
-        return {"payload": {"ip" : ip, "port" : port}, "message" : "Successfully created resource for sql injection example}"}
+
+        if ip == port and port == "":
+            return {"error" : "Your resource image contains error"}
+
+        return {"payload": {"ip" : ip, "port" : port}, "message" : f"Successfully created resource {resource_name}"}
 
     @marshal_with(mfields)
     def delete(self):
         args = input_data.parse_args()
-        user_name = args['user_name']
+        user_name, resource_name = args['user_name'], args['resource_name']
 
-        query = f"kubectl delete pod {user_name}-sql-inj-ex"
+        resource_name = resource_name.replace("/", "-")
+
+        query = f"kubectl delete pod {user_name}-{resource_name}"
+        # print(query)
         subprocess.call(query, shell=True)
             
-        return {"message" : f"Successfully terminate {user_name}'s sql injection example"}
+        return {"message" : f"Successfully terminate {user_name}'s {resource_name} example"}
 
 
 class KaliContainer(Resource):
