@@ -28,3 +28,5 @@ class Pod:
     def get_address(self) -> tuple:
         pass
 
+    def get_internal_address(self) -> tuple:
+        pass

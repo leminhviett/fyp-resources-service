@@ -122,7 +122,7 @@ class LocalPod(Pod):
         q2 = "kubectl get pod %s -o jsonpath='{.spec.containers[*].ports[*].containerPort}'"% (self.name)
 
         flag = 0
-        while flag <= 5:
+        while flag <= 10:
             res1 = subprocess.run(q1, shell=True, capture_output=True)
             res2 = subprocess.run(q2, shell=True, capture_output=True)
             int_ip, port = res1.stdout.decode(), res2.stdout.decode()
