@@ -43,6 +43,7 @@ class CustomResource(Resource):
                 img_name = img_tag
 
             if not is_exist(img_name):
+                print(img_name)
                 return {"error" : "Image not found in Docker Hub"}
 
         except Exception as e:
@@ -50,7 +51,7 @@ class CustomResource(Resource):
             return {"error" : "Resource name in wrong format"}
 
 
-        pod = LocalPod(MiniKube.get_instance(), name=f"{user_name}-{user_repo}-{img_tag}", img_name=resource_name, port=8000, remote_access=False)
+        pod = LocalPod(MiniKube.get_instance(), name=f"{user_name}-{user_repo}-{img_name}", img_name=resource_name, port=8000, remote_access=False)
         ip, port = pod.get_internal_address()
 
         if ip == port and port == "":
