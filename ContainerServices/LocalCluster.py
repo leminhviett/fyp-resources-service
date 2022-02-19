@@ -1,7 +1,7 @@
 from re import sub
 import time, subprocess
 from .Base import Cluster, Pod
-import multiprocessing, collections, threading
+import collections
 
 class MiniKube(Cluster):
     started = False
@@ -35,6 +35,8 @@ class MiniKube(Cluster):
         proc = subprocess.Popen(query, shell=True)
         cls._exposed_services[service_name] = proc
 
+        print("expose service")
+
         time.sleep(3)
 
     @classmethod
@@ -43,7 +45,7 @@ class MiniKube(Cluster):
         del cls._exposed_services[service_name]
     
 class LocalPod(Pod):
-    def __init__(self, cluster, name, remote_access=True, img_name="viet009/kali-headless:0.02", port=22) -> None:
+    def __init__(self, cluster, name, remote_access=True, img_name="viet009/kali-headless:0.03", port=22) -> None:
         self.pod_proc = None
         super().__init__(cluster, name, img_name, port, remote_access)
 
